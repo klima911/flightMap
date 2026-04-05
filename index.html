@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>iPhone 扫码与二维码/条码生成工具</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --primary: #1a73e8;
+        --text: #15223a;
+        --muted: #5f6b7a;
+        --line: #dce3ee;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 16px 14px 30px;
+      }
+
+      h1 {
+        font-size: 1.35rem;
+        margin: 0 0 12px;
+      }
+
+      .hint {
+        color: var(--muted);
+        margin: 0 0 16px;
+        line-height: 1.4;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 14px;
+        box-shadow: 0 2px 8px rgba(18, 36, 63, 0.05);
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .tab-btn {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--text);
+        padding: 8px 12px;
+        font-size: 0.92rem;
+      }
+
+      .tab-btn.active {
+        border-color: var(--primary);
+        color: var(--primary);
+        font-weight: 600;
+      }
+
+      .panel { display: none; }
+      .panel.active { display: block; }
+
+      .reader {
+        width: 100%;
+        min-height: 260px;
+      }
+
+      textarea,
+      input,
+      select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 0.95rem;
+        margin-top: 8px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 10px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 0.95rem;
+        padding: 10px 14px;
+        margin-top: 10px;
+      }
+
+      .btn.secondary {
+        background: #3d4b60;
+      }
+
+      .result,
+      .output {
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px dashed var(--line);
+        white-space: pre-wrap;
+        word-break: break-all;
+        background: #fbfdff;
+      }
+
+      #qrcode {
+        margin-top: 12px;
+        display: flex;
+        justify-content: center;
+      }
+
+      #barcodeWrap {
+        margin-top: 14px;
+        overflow: auto;
+        text-align: center;
+      }
+
+      small { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <h1>iPhone 扫描二维码/QR 码 + 生成二维码与条码</h1>
+      <p class="hint">在 iPhone Safari 中使用时，请先允许相机权限；HTTPS 或 localhost 环境下体验最佳。</p>
+
+      <div class="card">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="scan">扫码</button>
+          <button class="tab-btn" data-tab="qrcode">生成二维码</button>
+          <button class="tab-btn" data-tab="barcode">生成条码</button>
+        </div>
+
+        <section id="scan" class="panel active">
+          <div id="reader" class="reader"></div>
+          <button id="startScan" class="btn">开始扫码</button>
+          <button id="stopScan" class="btn secondary">停止扫码</button>
+          <div id="scanResult" class="result">扫码结果会显示在这里。</div>
+        </section>
+
+        <section id="qrcode" class="panel">
+          <label for="qrText">输入要编码的文字或链接</label>
+          <textarea id="qrText" rows="5" placeholder="例如：https://example.com 或任意中文文本"></textarea>
+          <button id="makeQr" class="btn">生成二维码</button>
+          <div id="qrcode" class="output"></div>
+        </section>
+
+        <section id="barcode" class="panel">
+          <label for="barcodeText">输入条码内容</label>
+          <input id="barcodeText" type="text" placeholder="例如：123456789012" />
+          <div class="row">
+            <label for="barcodeType">条码类型</label>
+            <select id="barcodeType">
+              <option value="CODE128">CODE128（推荐，兼容英文+数字）</option>
+              <option value="EAN13">EAN-13（13位数字）</option>
+              <option value="UPC">UPC（12位数字）</option>
+            </select>
+          </div>
+          <button id="makeBarcode" class="btn">生成条码</button>
+          <div id="barcodeWrap" class="output"><svg id="barcodeSvg"></svg></div>
+          <small>提示：EAN-13 / UPC 仅支持数字且长度严格。</small>
+        </section>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/html5-qrcode" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js" defer></script>
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        const tabButtons = document.querySelectorAll(".tab-btn");
+        const panels = document.querySelectorAll(".panel");
+
+        tabButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            tabButtons.forEach((b) => b.classList.remove("active"));
+            panels.forEach((p) => p.classList.remove("active"));
+            button.classList.add("active");
+            document.getElementById(button.dataset.tab).classList.add("active");
+          });
+        });
+
+        let qrScanner;
+        let scanning = false;
+
+        const startBtn = document.getElementById("startScan");
+        const stopBtn = document.getElementById("stopScan");
+        const scanResult = document.getElementById("scanResult");
+
+        startBtn.addEventListener("click", async () => {
+          if (scanning) return;
+          try {
+            qrScanner = new Html5Qrcode("reader");
+            await qrScanner.start(
+              { facingMode: "environment" },
+              { fps: 10, qrbox: { width: 240, height: 240 } },
+              (decodedText) => {
+                scanResult.textContent = decodedText;
+              },
+              () => {}
+            );
+            scanning = true;
+            scanResult.textContent = "扫码中，请将二维码或条码放入取景框。";
+          } catch (error) {
+            scanResult.textContent = `启动扫码失败：${error.message || error}`;
+          }
+        });
+
+        stopBtn.addEventListener("click", async () => {
+          if (!scanning || !qrScanner) return;
+          try {
+            await qrScanner.stop();
+            await qrScanner.clear();
+            scanning = false;
+            scanResult.textContent = "已停止扫码。";
+          } catch (error) {
+            scanResult.textContent = `停止扫码失败：${error.message || error}`;
+          }
+        });
+
+        const qrText = document.getElementById("qrText");
+        const makeQr = document.getElementById("makeQr");
+        const qrWrap = document.getElementById("qrcode");
+
+        makeQr.addEventListener("click", () => {
+          const value = qrText.value.trim();
+          if (!value) {
+            qrWrap.textContent = "请先输入内容。";
+            return;
+          }
+          qrWrap.innerHTML = "";
+          new QRCode(qrWrap, {
+            text: value,
+            width: 240,
+            height: 240,
+          });
+        });
+
+        const barcodeText = document.getElementById("barcodeText");
+        const barcodeType = document.getElementById("barcodeType");
+        const barcodeBtn = document.getElementById("makeBarcode");
+        const barcodeSvg = document.getElementById("barcodeSvg");
+        const barcodeWrap = document.getElementById("barcodeWrap");
+
+        barcodeBtn.addEventListener("click", () => {
+          const value = barcodeText.value.trim();
+          if (!value) {
+            barcodeWrap.insertAdjacentText("afterbegin", "请先输入条码内容。\n");
+            return;
+          }
+
+          try {
+            JsBarcode(barcodeSvg, value, {
+              format: barcodeType.value,
+              lineColor: "#111",
+              width: 2,
+              height: 90,
+              displayValue: true,
+              margin: 8,
+            });
+          } catch (error) {
+            barcodeWrap.insertAdjacentText(
+              "afterbegin",
+              `生成失败，请检查长度或字符格式：${error.message || error}\n`
+            );
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
